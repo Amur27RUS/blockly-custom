@@ -764,7 +764,9 @@ const JOIN_MUTATOR_MIXIN = {
       ) as JoinItemBlock;
       itemBlock.initSvg();
       connection.connect(itemBlock.previousConnection);
-      connection = itemBlock.nextConnection;
+      const nextConn = itemBlock.nextConnection;
+      if (!nextConn) break;  // Прерываем цикл, если nextConnection null
+      connection = nextConn;
     }
     return containerBlock;
   },

@@ -264,7 +264,9 @@ export class RenderInfo {
    * Create all non-spacer elements that belong on the bottom row.
    */
   protected populateBottomRow_() {
-    this.bottomRow.hasNextConnection = !!this.block_.nextConnection;
+    // Check if block has any next connections
+    const nextConnections = this.block_.nextConnections;
+    this.bottomRow.hasNextConnection = nextConnections.length > 0;
 
     const followsStatement =
       this.block_.inputList.length &&
@@ -288,12 +290,28 @@ export class RenderInfo {
       this.bottomRow.elements.push(new RoundCorner(this.constants_));
     }
 
+    // Add all next connections to the bottom row
     if (this.bottomRow.hasNextConnection) {
-      this.bottomRow.connection = new NextConnection(
-        this.constants_,
-        this.block_.nextConnection as RenderedConnection,
-      );
-      this.bottomRow.elements.push(this.bottomRow.connection);
+      // Store all connections in the connections array
+      this.bottomRow.connections = [];
+      
+      for (let i = 0; i < nextConnections.length; i++) {
+        const connection = new NextConnection(
+          this.constants_,
+          nextConnections[i] as RenderedConnection,
+        );
+        
+        // Add connection to the elements array for rendering
+        this.bottomRow.elements.push(connection);
+        
+        // Store in the connections array for positioning
+        this.bottomRow.connections.push(connection);
+        
+        // For backward compatibility, store the first connection
+        if (i === 0) {
+          this.bottomRow.connection = connection;
+        }
+      }
     }
 
     const rightSquareCorner = this.bottomRow.hasRightSquareCorner(this.block_);

@@ -25,9 +25,14 @@ export class BottomRow extends Row {
   hasNextConnection = false;
 
   /**
-   * The next connection on the row, if any.
+   * The next connection on the row, if any. For backward compatibility.
    */
   connection: NextConnection | null = null;
+
+  /**
+   * Array of next connections on the row.
+   */
+  connections: NextConnection[] = [];
 
   /**
    * The amount that the bottom of the block extends below the horizontal
@@ -57,7 +62,7 @@ export class BottomRow extends Row {
    * @returns Whether or not the bottom row has a left square corner.
    */
   hasLeftSquareCorner(block: BlockSvg): boolean {
-    return !!block.outputConnection || !!block.getNextBlock();
+    return !!block.outputConnection || block.getNextBlocks().length > 0;
   }
 
   /**

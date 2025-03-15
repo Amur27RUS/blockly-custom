@@ -159,9 +159,37 @@ export class BlockSvg
   // TODO(b/109816955): remove '!', see go/strict-prop-init-fix.
   override outputConnection!: RenderedConnection;
   // TODO(b/109816955): remove '!', see go/strict-prop-init-fix.
-  override nextConnection!: RenderedConnection;
+  // Не нужно переопределять nextConnection, так как оно определено как геттер/сеттер
+  // в родительском классе Block
   // TODO(b/109816955): remove '!', see go/strict-prop-init-fix.
   override previousConnection!: RenderedConnection;
+  
+  // Переопределяем nextConnections как массив RenderedConnection
+  override nextConnections!: RenderedConnection[];
+  
+  /**
+   * Геттер для nextConnection с приведением типа к RenderedConnection
+   */
+  get nextConnection(): RenderedConnection | null {
+    return this.nextConnections.length > 0 
+      ? this.nextConnections[0] as RenderedConnection 
+      : null;
+  }
+  
+  /**
+   * Сеттер для nextConnection с обновлением массива nextConnections
+   */
+  set nextConnection(connection: RenderedConnection | null) {
+    if (connection) {
+      if (this.nextConnections.length > 0) {
+        this.nextConnections[0] = connection;
+      } else {
+        this.nextConnections.push(connection);
+      }
+    } else {
+      this.nextConnections = [];
+    }
+  }
 
   private translation = '';
 
@@ -272,6 +300,64 @@ export class BlockSvg
       return;
     }
     this.removeSelect();
+  }
+  
+  /**
+   * Adds an additional next connection to the block.
+   * This allows for multiple blocks to be connected below this block.
+   * 
+   * @param opt_check Statement type or list of statement types.
+   * @returns The newly created connection.
+   */
+  addAdditionalNextConnection(opt_check?: string | string[] | null): RenderedConnection {
+    // Create the connection using the parent method
+    const connection = this.addNextConnection(opt_check);
+    
+    // Convert to a rendered connection if needed
+    let renderedConnection: RenderedConnection;
+    
+    if (!(connection instanceof RenderedConnection)) {
+      // In BlockSvg we need rendered connections
+      renderedConnection = new RenderedConnection(
+        this as unknown as BlockSvg,
+        ConnectionType.NEXT_STATEMENT
+      );
+      // Copy properties
+      renderedConnection.setCheck(connection.getCheck());
+      
+      // Replace in the array - требуется преобразование типов
+      const index = this.nextConnections.findIndex(conn => 
+        conn.type === connection.type && 
+        JSON.stringify(conn.getCheck()) === JSON.stringify(connection.getCheck())
+      );
+      if (index !== -1) {
+        connection.dispose();
+        this.nextConnections[index] = renderedConnection;
+      } else {
+        // Если не нашли, просто добавляем новое соединение
+        this.nextConnections.push(renderedConnection);
+      }
+    } else {
+      renderedConnection = connection as RenderedConnection;
+    }
+    
+    // Force re-rendering of the block to show the new connection
+    if (this.rendered) {
+      this.queueRender();
+      // Запрашиваем перерисовку с использованием queueRender из renderManagement
+      renderManagement.queueRender(this);
+    }
+    
+    return renderedConnection;
+  }
+  
+  /**
+   * Get all blocks connected to the next connections of this block.
+   *
+   * @returns Array of blocks connected to the next connections.
+   */
+  getNextBlocks(): BlockSvg[] {
+    return super.getNextBlocks() as BlockSvg[];
   }
 
   /**

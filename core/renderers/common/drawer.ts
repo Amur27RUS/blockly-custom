@@ -206,8 +206,8 @@ export class Drawer {
   }
 
   /**
-   * Add steps for the bottom edge of a block, possibly including a notch
-   * for the next connection.
+   * Add steps for the bottom edge of a block, possibly including notches
+   * for the next connections.
    */
   protected drawBottom_() {
     const bottomRow = this.info_.bottomRow;
@@ -216,9 +216,14 @@ export class Drawer {
 
     let rightCornerYOffset = 0;
     let outlinePath = '';
+    
+    // Track multiple connections for custom rendering
+    const nextConnections: Connection[] = [];
+    
+    // First pass - collect next connections and handle other elements
     for (let i = elems.length - 1, elem; (elem = elems[i]); i--) {
       if (Types.isNextConnection(elem) && elem instanceof Connection) {
-        outlinePath += (elem.shape as Notch).pathRight;
+        nextConnections.push(elem);
       } else if (Types.isLeftSquareCorner(elem)) {
         outlinePath += svgPaths.lineOnAxis('H', bottomRow.xPos);
       } else if (Types.isLeftRoundedCorner(elem)) {
@@ -230,11 +235,42 @@ export class Drawer {
         outlinePath += svgPaths.lineOnAxis('h', elem.width * -1);
       }
     }
-
+    
+    // Set vertical position
     this.outlinePath_ += svgPaths.lineOnAxis(
       'V',
       bottomRow.baseline - rightCornerYOffset,
     );
+    
+    // If we have multiple next connections, handle them specially
+    if (nextConnections.length > 1) {
+      const connectionSpacing = this.constants_.TAB_WIDTH + 10;
+      let xPosition = bottomRow.xPos + this.constants_.NOTCH_OFFSET_LEFT;
+      
+      // Add path for multiple connections
+      for (let i = 0; i < nextConnections.length; i++) {
+        const connector = nextConnections[i];
+        
+        // Move to the position for this connection
+        if (i === 0) {
+          // First connection - move from current position
+          outlinePath += svgPaths.lineOnAxis('H', xPosition + (connector.shape as Notch).width);
+        } else {
+          // Subsequent connections - add a line between connections
+          outlinePath += svgPaths.lineOnAxis('h', connectionSpacing);
+        }
+        
+        // Add the connection notch
+        outlinePath += (connector.shape as Notch).pathRight;
+        
+        // Update position for next connection
+        xPosition += connectionSpacing + (connector.shape as Notch).width;
+      }
+    } else if (nextConnections.length === 1) {
+      // Handle single connection case as before
+      outlinePath += (nextConnections[0].shape as Notch).pathRight;
+    }
+    
     this.outlinePath_ += outlinePath;
   }
 
@@ -407,15 +443,33 @@ export class Drawer {
     }
   }
 
-  /** Position the next connection on a block. */
+  /** Position all next connections on a block. */
   protected positionNextConnection_() {
     const bottomRow = this.info_.bottomRow;
 
+    // For backward compatibility - position the first connection
     if (bottomRow.connection) {
       const connInfo = bottomRow.connection;
       const x = connInfo.xPos; // Already contains info about startX.
       const connX = this.info_.RTL ? -x : x;
       connInfo.connectionModel.setOffsetInBlock(connX, bottomRow.baseline);
+    }
+    
+    // Position all connections in the connections array
+    if (bottomRow.connections && bottomRow.connections.length > 0) {
+      const connectionSpacing = this.constants_.TAB_WIDTH + 10; // Additional spacing between connections
+      let xOffset = 0;
+      
+      for (let i = 0; i < bottomRow.connections.length; i++) {
+        const connInfo = bottomRow.connections[i];
+        // Calculate position with spacing between connections
+        const x = connInfo.xPos + xOffset; // Add offset for multiple connections
+        const connX = this.info_.RTL ? -x : x;
+        connInfo.connectionModel.setOffsetInBlock(connX, bottomRow.baseline);
+        
+        // Increment offset for next connection
+        xOffset += connectionSpacing;
+      }
     }
   }
 

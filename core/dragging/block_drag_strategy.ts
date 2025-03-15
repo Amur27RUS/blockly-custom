@@ -168,8 +168,8 @@ export class BlockDragStrategy implements IDragStrategy {
     this.startParentConn =
       this.block.outputConnection?.targetConnection ??
       this.block.previousConnection?.targetConnection;
-    if (healStack) {
-      this.startChildConn = this.block.nextConnection?.targetConnection;
+    if (healStack && this.block.nextConnection) {
+      this.startChildConn = this.block.nextConnection.targetConnection;
     }
 
     this.block.unplug(healStack);
@@ -431,7 +431,9 @@ export class BlockDragStrategy implements IDragStrategy {
       return;
     }
 
-    this.startChildConn?.connect(this.block.nextConnection);
+    if (this.startChildConn && this.block.nextConnection) {
+      this.startChildConn.connect(this.block.nextConnection);
+    }
     if (this.startParentConn) {
       switch (this.startParentConn.type) {
         case ConnectionType.INPUT_VALUE:

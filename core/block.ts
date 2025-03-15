@@ -171,7 +171,15 @@ export class Block implements IASTNodeLocation {
 
   id: string;
   outputConnection: Connection | null = null;
-  nextConnection: Connection | null = null;
+  // Изменено: массив для множественных next-соединений
+  nextConnections: Connection[] = [];
+  // Обратная совместимость: первое соединение в массиве
+  get nextConnection(): Connection | null {
+    return this.nextConnections.length > 0 ? this.nextConnections[0] : null;
+  }
+  set nextConnection(connection: Connection | null) {
+    this.nextConnections = connection ? [connection] : [];
+  }
   previousConnection: Connection | null = null;
   inputList: Input[] = [];
   inputsInline?: boolean;
@@ -534,9 +542,8 @@ export class Block implements IASTNodeLocation {
     if (this.previousConnection) {
       myConnections.push(this.previousConnection);
     }
-    if (this.nextConnection) {
-      myConnections.push(this.nextConnection);
-    }
+    // Add all next connections
+    myConnections.push(...this.nextConnections);
     for (let i = 0, input; (input = this.inputList[i]); i++) {
       if (input.connection) {
         myConnections.push(input.connection);
@@ -547,7 +554,7 @@ export class Block implements IASTNodeLocation {
 
   /**
    * Walks down a stack of blocks and finds the last next connection on the
-   * stack.
+   * stack. With multiple next connections, this follows only the first one.
    *
    * @param ignoreShadows If true,the last connection on a non-shadow block will
    *     be returned. If false, this will follow shadows to find the last
@@ -556,15 +563,52 @@ export class Block implements IASTNodeLocation {
    * @internal
    */
   lastConnectionInStack(ignoreShadows: boolean): Connection | null {
-    let nextConnection = this.nextConnection;
+    if (this.nextConnections.length === 0) return null;
+
+    let nextConnection: Connection | null = this.nextConnections[0];
     while (nextConnection) {
-      const nextBlock = nextConnection.targetBlock();
+      const nextBlock: any = nextConnection.targetBlock();
       if (!nextBlock || (ignoreShadows && nextBlock.isShadow())) {
         return nextConnection;
       }
-      nextConnection = nextBlock.nextConnection;
+      // In case of multiple connections on the next block, follow only the first one
+      nextConnection =
+        nextBlock.nextConnections.length > 0
+          ? nextBlock.nextConnections[0]
+          : null;
     }
     return null;
+  }
+
+  /**
+   * Gets all the last next connections in all possible paths starting from this block.
+   *
+   * @param ignoreShadows If true, stops at non-shadow blocks.
+   * @returns Array of last next connections in all paths.
+   */
+  getAllLastConnectionsInStack(ignoreShadows: boolean): Connection[] {
+    if (this.nextConnections.length === 0) return [];
+
+    const lastConnections: Connection[] = [];
+
+    for (const nextConnection of this.nextConnections) {
+      const nextBlock = nextConnection.targetBlock();
+      if (!nextBlock || (ignoreShadows && nextBlock.isShadow())) {
+        lastConnections.push(nextConnection);
+      } else {
+        // Recursively get last connections from the next block
+        const childLastConnections =
+          nextBlock.getAllLastConnectionsInStack(ignoreShadows);
+        if (childLastConnections.length > 0) {
+          lastConnections.push(...childLastConnections);
+        } else {
+          // If there are no children connections, this is a leaf
+          lastConnections.push(nextConnection);
+        }
+      }
+    }
+
+    return lastConnections;
   }
 
   /**
@@ -625,12 +669,26 @@ export class Block implements IASTNodeLocation {
   }
 
   /**
-   * Return the next statement block directly connected to this block.
+   * Return the next statement block directly connected to the first next connection of this block.
+   * For compatibility with standard Blockly behavior.
    *
    * @returns The next statement block or null.
    */
   getNextBlock(): Block | null {
-    return this.nextConnection && this.nextConnection.targetBlock();
+    return this.nextConnections.length > 0
+      ? this.nextConnections[0].targetBlock()
+      : null;
+  }
+
+  /**
+   * Return all next statement blocks directly connected to any of this block's next connections.
+   *
+   * @returns Array of next statement blocks, may be empty.
+   */
+  getNextBlocks(): Block[] {
+    return this.nextConnections
+      .map((conn) => conn.targetBlock())
+      .filter((block): block is Block => block !== null);
   }
 
   /**
@@ -1270,23 +1328,41 @@ export class Block implements IASTNodeLocation {
       if (opt_check === undefined) {
         opt_check = null;
       }
-      if (!this.nextConnection) {
-        this.nextConnection = this.makeConnection_(
-          ConnectionType.NEXT_STATEMENT,
-        );
+      if (this.nextConnections.length === 0) {
+        const connection = this.makeConnection_(ConnectionType.NEXT_STATEMENT);
+        this.nextConnections.push(connection);
       }
-      this.nextConnection.setCheck(opt_check);
+      // Set check on all connections
+      for (const connection of this.nextConnections) {
+        connection.setCheck(opt_check);
+      }
     } else {
-      if (this.nextConnection) {
-        if (this.nextConnection.isConnected()) {
+      // Check if any connections are connected
+      for (const connection of this.nextConnections) {
+        if (connection.isConnected()) {
           throw Error(
             'Must disconnect next statement before removing ' + 'connection.',
           );
         }
-        this.nextConnection.dispose();
-        this.nextConnection = null;
+        connection.dispose();
       }
+      this.nextConnections = [];
     }
+  }
+
+  /**
+   * Add another next connection to the bottom of this block.
+   *
+   * @param opt_check Statement type or list of statement types.
+   * @returns The newly created connection.
+   */
+  addNextConnection(opt_check?: string | string[] | null): Connection {
+    const connection = this.makeConnection_(ConnectionType.NEXT_STATEMENT);
+    if (opt_check !== undefined) {
+      connection.setCheck(opt_check);
+    }
+    this.nextConnections.push(connection);
+    return connection;
   }
 
   /**
