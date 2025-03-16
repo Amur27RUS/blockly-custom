@@ -231,6 +231,38 @@ export class Highlighter {
         this.steps_ += svgPaths.moveTo(row.xPos, row.baseline);
         this.steps_ += this.outsideCornerPaths_.bottomLeft();
       }
+      
+      // Add highlights for multiple connections if needed
+      if (row.connections && row.connections.length > 1) {
+        // We need to add multiple notch highlights
+        const totalWidth = this.info_.width;
+        const availableWidth = totalWidth - (2 * this.constants_.NOTCH_OFFSET_LEFT);
+        const spaceBetweenConnections = availableWidth / (row.connections.length + 1);
+        
+        for (let i = 0; i < row.connections.length; i++) {
+          const conn = row.connections[i];
+          if (!conn || !conn.shape) continue;
+          
+          // Skip first connection as it's already handled by the standard path
+          if (i === 0) continue;
+          
+          // Position for this connection
+          const x = this.constants_.NOTCH_OFFSET_LEFT + spaceBetweenConnections * (i + 1);
+          
+          // Add highlight path for this connection
+          // Since we don't have direct access to a highlight path method, 
+          // we'll create a simplified highlight based on standard notch
+          const notchWidth = this.constants_.NOTCH.width;
+          
+          this.steps_ += svgPaths.moveTo(
+            x - (notchWidth / 2) + this.highlightOffset,
+            row.baseline - this.highlightOffset
+          );
+          
+          // Simple version of the notch highlight
+          this.steps_ += svgPaths.lineOnAxis('h', notchWidth);
+        }
+      }
     }
   }
 
