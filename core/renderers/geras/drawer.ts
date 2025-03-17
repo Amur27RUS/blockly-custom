@@ -152,42 +152,66 @@ export class Drawer extends BaseDrawer {
   override positionNextConnection_() {
     const bottomRow = this.info_.bottomRow;
 
-    // For backward compatibility - position the first connection
-    if (bottomRow.connection) {
-      const connInfo = bottomRow.connection;
-      const x = connInfo.xPos; // Already contains info about startX.
+    // Handle case with no connections
+    if (!bottomRow.connections || bottomRow.connections.length === 0) {
+      return;
+    }
+    
+    // Handle single connection - standard case
+    if (bottomRow.connections.length === 1) {
+      const connInfo = bottomRow.connections[0];
+      if (!connInfo || !connInfo.connectionModel) return;
+      
+      const x = connInfo.xPos; // Already contains info about startX
       const connX =
         (this.info_.RTL ? -x : x) + this.constants_.DARK_PATH_OFFSET / 2;
+      
       connInfo.connectionModel.setOffsetInBlock(
         connX,
         bottomRow.baseline + this.constants_.DARK_PATH_OFFSET,
       );
+      
+      // Also update the standard connection property for backward compatibility
+      if (bottomRow.connection && bottomRow.connection.connectionModel) {
+        bottomRow.connection.connectionModel.setOffsetInBlock(
+          connX,
+          bottomRow.baseline + this.constants_.DARK_PATH_OFFSET,
+        );
+      }
+      
+      return;
     }
     
-    // Position all connections in the connections array
-    if (bottomRow.connections && bottomRow.connections.length > 0) {
+    // Handle multiple connections
+    if (bottomRow.connections.length > 1) {
+      // Calculate spacing between connections based on block width
       const totalWidth = this.info_.width;
-      const connectionSpacing = this.constants_.TAB_WIDTH + 10; // Additional spacing between connections
+      const availableWidth = totalWidth - (2 * this.constants_.NOTCH_OFFSET_LEFT);
+      const spaceBetweenConnections = availableWidth / (bottomRow.connections.length + 1);
       
-      // For multiple connections, distribute evenly
-      if (bottomRow.connections.length > 1) {
-        // Calculate spacing between connections based on block width
-        const availableWidth = totalWidth - (2 * this.constants_.NOTCH_OFFSET_LEFT);
-        const spaceBetweenConnections = availableWidth / (bottomRow.connections.length + 1);
+      for (let i = 0; i < bottomRow.connections.length; i++) {
+        const connInfo = bottomRow.connections[i];
+        if (!connInfo || !connInfo.connectionModel) continue;
         
-        for (let i = 0; i < bottomRow.connections.length; i++) {
-          const connInfo = bottomRow.connections[i];
-          // Calculate position with spacing between connections
-          const x = this.constants_.NOTCH_OFFSET_LEFT + spaceBetweenConnections * (i + 1);
-          const connX = (this.info_.RTL ? -x : x) + this.constants_.DARK_PATH_OFFSET / 2;
-          
-          connInfo.connectionModel.setOffsetInBlock(
+        // Calculate position with spacing between connections
+        const x = bottomRow.xPos + this.constants_.NOTCH_OFFSET_LEFT + 
+                 spaceBetweenConnections * (i + 1);
+        const connX = (this.info_.RTL ? -x : x) + this.constants_.DARK_PATH_OFFSET / 2;
+        
+        // Set the position of the connection
+        connInfo.connectionModel.setOffsetInBlock(
+          connX,
+          bottomRow.baseline + this.constants_.DARK_PATH_OFFSET,
+        );
+        
+        // Also update the standard connection property for the first connection
+        if (i === 0 && bottomRow.connection && bottomRow.connection.connectionModel) {
+          bottomRow.connection.connectionModel.setOffsetInBlock(
             connX,
             bottomRow.baseline + this.constants_.DARK_PATH_OFFSET,
           );
         }
-      } 
-      // If there's only one connection, use standard positioning (already handled above)
+      }
     }
   }
 }

@@ -217,10 +217,10 @@ export class Drawer {
     let rightCornerYOffset = 0;
     let outlinePath = '';
     
-    // Track multiple connections for custom rendering
+    // Track next connections for custom rendering
     const nextConnections: Connection[] = [];
     
-    // First pass - collect next connections and handle other elements
+    // First pass - collect next connections and handle non-connection elements
     for (let i = elems.length - 1, elem; (elem = elems[i]); i--) {
       if (Types.isNextConnection(elem) && elem instanceof Connection) {
         nextConnections.push(elem);
@@ -242,35 +242,45 @@ export class Drawer {
       bottomRow.baseline - rightCornerYOffset,
     );
     
-    // If we have multiple next connections, handle them specially
-    if (nextConnections.length > 1) {
-      const connectionSpacing = this.constants_.TAB_WIDTH + 10;
-      let xPosition = bottomRow.xPos + this.constants_.NOTCH_OFFSET_LEFT;
+    // Draw connections based on count
+    if (nextConnections.length === 0) {
+      // No connections - just add the outline path
+      this.outlinePath_ += outlinePath;
+      return;
+    } else if (nextConnections.length === 1) {
+      // Standard case - single connection
+      // This follows the original logic for backward compatibility
+      const connector = nextConnections[0];
+      outlinePath += (connector.shape as Notch).pathRight;
+    } else if (nextConnections.length > 1) {
+      // Multiple connections - distribute them evenly
+      const totalWidth = bottomRow.width;
+      const availableWidth = totalWidth - (2 * this.constants_.NOTCH_OFFSET_LEFT);
+      const spaceBetweenConnections = availableWidth / (nextConnections.length + 1);
       
-      // Add path for multiple connections
+      // Start path at the left edge
+      outlinePath += svgPaths.lineOnAxis('H', bottomRow.xPos);
+      
+      // Add each connection notch
       for (let i = 0; i < nextConnections.length; i++) {
         const connector = nextConnections[i];
+        if (!connector || !connector.shape) continue;
         
-        // Move to the position for this connection
-        if (i === 0) {
-          // First connection - move from current position
-          outlinePath += svgPaths.lineOnAxis('H', xPosition + (connector.shape as Notch).width);
-        } else {
-          // Subsequent connections - add a line between connections
-          outlinePath += svgPaths.lineOnAxis('h', connectionSpacing);
-        }
+        // Calculate position for this connection
+        const x = bottomRow.xPos + this.constants_.NOTCH_OFFSET_LEFT + spaceBetweenConnections * (i + 1);
+        
+        // Move to the position before the notch
+        outlinePath += svgPaths.lineOnAxis('H', x - (connector.shape as Notch).width / 2);
         
         // Add the connection notch
         outlinePath += (connector.shape as Notch).pathRight;
-        
-        // Update position for next connection
-        xPosition += connectionSpacing + (connector.shape as Notch).width;
       }
-    } else if (nextConnections.length === 1) {
-      // Handle single connection case as before
-      outlinePath += (nextConnections[0].shape as Notch).pathRight;
+      
+      // Complete the path to the right edge
+      outlinePath += svgPaths.lineOnAxis('H', bottomRow.xPos + bottomRow.width);
     }
     
+    // Add the final outline path
     this.outlinePath_ += outlinePath;
   }
 
