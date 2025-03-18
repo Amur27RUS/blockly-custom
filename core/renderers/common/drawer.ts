@@ -22,6 +22,18 @@ import type {ConstantProvider, Notch, PuzzleTab} from './constants.js';
 import {isDynamicShape, isNotch, isPuzzleTab} from './constants.js';
 import type {RenderInfo} from './info.js';
 
+// Special block type that should support multiple connections
+const BASIC_SWITCH_BLOCK = 'basic_switch_block';
+
+/**
+ * Determines if the block is a switch block that should support multiple connections
+ * @param block The block to check
+ * @returns True if the block is a basic_switch_block
+ */
+function isBasicSwitchBlock(block: BlockSvg): boolean {
+  return block.type === BASIC_SWITCH_BLOCK;
+}
+
 /**
  * An object that draws a block based on the given rendering information.
  */
@@ -242,18 +254,21 @@ export class Drawer {
       bottomRow.baseline - rightCornerYOffset,
     );
     
+    // Check if this is a basic_switch_block which should support multiple connections
+    const isSwitchBlock = isBasicSwitchBlock(this.block_);
+    
     // Draw connections based on count
     if (nextConnections.length === 0) {
       // No connections - just add the outline path
       this.outlinePath_ += outlinePath;
       return;
-    } else if (nextConnections.length === 1) {
-      // Standard case - single connection
-      // This follows the original logic for backward compatibility
+    } else if (nextConnections.length === 1 || !isSwitchBlock) {
+      // Standard case - single connection, or non-switch block with any number of connections
+      // Always draw only the first connection for non-switch blocks
       const connector = nextConnections[0];
       outlinePath += (connector.shape as Notch).pathRight;
-    } else if (nextConnections.length > 1) {
-      // Multiple connections - distribute them evenly
+    } else if (nextConnections.length > 1 && isSwitchBlock) {
+      // Multiple connections for switch block - distribute them evenly
       const totalWidth = bottomRow.width;
       const availableWidth = totalWidth - (2 * this.constants_.NOTCH_OFFSET_LEFT);
       const spaceBetweenConnections = availableWidth / (nextConnections.length + 1);
@@ -456,6 +471,9 @@ export class Drawer {
   /** Position all next connections on a block. */
   protected positionNextConnection_() {
     const bottomRow = this.info_.bottomRow;
+    
+    // Check if this is a basic_switch_block which should support multiple connections
+    const isSwitchBlock = isBasicSwitchBlock(this.block_);
 
     // For backward compatibility - position the first connection
     if (bottomRow.connection) {
@@ -467,18 +485,46 @@ export class Drawer {
     
     // Position all connections in the connections array
     if (bottomRow.connections && bottomRow.connections.length > 0) {
-      const connectionSpacing = this.constants_.TAB_WIDTH + 10; // Additional spacing between connections
-      let xOffset = 0;
+      // For non-switch blocks, only position the first connection
+      if (!isSwitchBlock && bottomRow.connections.length > 1) {
+        const connInfo = bottomRow.connections[0];
+        if (connInfo && connInfo.connectionModel) {
+          const x = connInfo.xPos;
+          const connX = this.info_.RTL ? -x : x;
+          connInfo.connectionModel.setOffsetInBlock(connX, bottomRow.baseline);
+        }
+        return;
+      }
       
-      for (let i = 0; i < bottomRow.connections.length; i++) {
-        const connInfo = bottomRow.connections[i];
-        // Calculate position with spacing between connections
-        const x = connInfo.xPos + xOffset; // Add offset for multiple connections
-        const connX = this.info_.RTL ? -x : x;
-        connInfo.connectionModel.setOffsetInBlock(connX, bottomRow.baseline);
-        
-        // Increment offset for next connection
-        xOffset += connectionSpacing;
+      // For switch blocks or blocks with a single connection
+      if (isSwitchBlock || bottomRow.connections.length === 1) {
+        // If multiple connections, space them evenly across the bottom
+        if (bottomRow.connections.length > 1) {
+          const totalWidth = this.info_.width;
+          const availableWidth = totalWidth - (2 * this.constants_.NOTCH_OFFSET_LEFT);
+          const spaceBetweenConnections = availableWidth / (bottomRow.connections.length + 1);
+          
+          for (let i = 0; i < bottomRow.connections.length; i++) {
+            const connInfo = bottomRow.connections[i];
+            if (!connInfo || !connInfo.connectionModel) continue;
+            
+            // Calculate position with spacing between connections
+            const x = bottomRow.xPos + this.constants_.NOTCH_OFFSET_LEFT + 
+                     spaceBetweenConnections * (i + 1);
+            const connX = this.info_.RTL ? -x : x;
+            
+            // Set the position of the connection
+            connInfo.connectionModel.setOffsetInBlock(connX, bottomRow.baseline);
+          }
+        } else {
+          // Single connection - standard positioning
+          const connInfo = bottomRow.connections[0];
+          if (connInfo && connInfo.connectionModel) {
+            const x = connInfo.xPos;
+            const connX = this.info_.RTL ? -x : x;
+            connInfo.connectionModel.setOffsetInBlock(connX, bottomRow.baseline);
+          }
+        }
       }
     }
   }

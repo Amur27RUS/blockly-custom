@@ -16,6 +16,19 @@ import type {RenderInfo} from './info.js';
 import type {InlineInput} from './measurables/inline_input.js';
 import type {PathObject} from './path_object.js';
 
+// Special block type that should support multiple connections
+const BASIC_SWITCH_BLOCK = 'basic_switch_block';
+
+/**
+ * Determines if the block is a switch block that should support multiple connections
+ *
+ * @param block The block to check
+ * @returns True if the block is a basic_switch_block
+ */
+function isBasicSwitchBlock(block: BlockSvg): boolean {
+  return block.type === BASIC_SWITCH_BLOCK;
+}
+
 /**
  * An object that draws a block based on the given rendering information,
  * customized for the geras renderer.
@@ -156,21 +169,25 @@ export class Drawer extends BaseDrawer {
     if (!bottomRow.connections || bottomRow.connections.length === 0) {
       return;
     }
-    
+
+    // Check if this is a basic_switch_block which should support multiple connections
+    const isSwitchBlock = isBasicSwitchBlock(this.block_);
+
     // Handle single connection - standard case
-    if (bottomRow.connections.length === 1) {
+    if (bottomRow.connections.length === 1 || !isSwitchBlock) {
+      // If not a switch block, we only position the first connection regardless of how many there are
       const connInfo = bottomRow.connections[0];
       if (!connInfo || !connInfo.connectionModel) return;
-      
+
       const x = connInfo.xPos; // Already contains info about startX
       const connX =
         (this.info_.RTL ? -x : x) + this.constants_.DARK_PATH_OFFSET / 2;
-      
+
       connInfo.connectionModel.setOffsetInBlock(
         connX,
         bottomRow.baseline + this.constants_.DARK_PATH_OFFSET,
       );
-      
+
       // Also update the standard connection property for backward compatibility
       if (bottomRow.connection && bottomRow.connection.connectionModel) {
         bottomRow.connection.connectionModel.setOffsetInBlock(
@@ -178,34 +195,42 @@ export class Drawer extends BaseDrawer {
           bottomRow.baseline + this.constants_.DARK_PATH_OFFSET,
         );
       }
-      
+
       return;
     }
-    
-    // Handle multiple connections
-    if (bottomRow.connections.length > 1) {
+
+    // Handle multiple connections (only applies to basic_switch_block)
+    if (bottomRow.connections.length > 1 && isSwitchBlock) {
       // Calculate spacing between connections based on block width
       const totalWidth = this.info_.width;
-      const availableWidth = totalWidth - (2 * this.constants_.NOTCH_OFFSET_LEFT);
-      const spaceBetweenConnections = availableWidth / (bottomRow.connections.length + 1);
-      
+      const availableWidth = totalWidth - 2 * this.constants_.NOTCH_OFFSET_LEFT;
+      const spaceBetweenConnections =
+        availableWidth / (bottomRow.connections.length + 1);
+
       for (let i = 0; i < bottomRow.connections.length; i++) {
         const connInfo = bottomRow.connections[i];
         if (!connInfo || !connInfo.connectionModel) continue;
-        
+
         // Calculate position with spacing between connections
-        const x = bottomRow.xPos + this.constants_.NOTCH_OFFSET_LEFT + 
-                 spaceBetweenConnections * (i + 1);
-        const connX = (this.info_.RTL ? -x : x) + this.constants_.DARK_PATH_OFFSET / 2;
-        
+        const x =
+          bottomRow.xPos +
+          this.constants_.NOTCH_OFFSET_LEFT +
+          spaceBetweenConnections * (i + 1);
+        const connX =
+          (this.info_.RTL ? -x : x) + this.constants_.DARK_PATH_OFFSET / 2;
+
         // Set the position of the connection
         connInfo.connectionModel.setOffsetInBlock(
           connX,
           bottomRow.baseline + this.constants_.DARK_PATH_OFFSET,
         );
-        
+
         // Also update the standard connection property for the first connection
-        if (i === 0 && bottomRow.connection && bottomRow.connection.connectionModel) {
+        if (
+          i === 0 &&
+          bottomRow.connection &&
+          bottomRow.connection.connectionModel
+        ) {
           bottomRow.connection.connectionModel.setOffsetInBlock(
             connX,
             bottomRow.baseline + this.constants_.DARK_PATH_OFFSET,

@@ -25,6 +25,18 @@ import type {
 import type {RenderInfo} from './info.js';
 import type {InlineInput} from './measurables/inline_input.js';
 
+// Special block type that should support multiple connections
+const BASIC_SWITCH_BLOCK = 'basic_switch_block';
+
+/**
+ * Determines if the block is a switch block that should support multiple connections
+ * @param info The render info to check
+ * @returns True if the block is a basic_switch_block
+ */
+function isBasicSwitchBlock(info: RenderInfo): boolean {
+  return info.block_ && info.block_.type === BASIC_SWITCH_BLOCK;
+}
+
 /**
  * An object that adds highlights to a block based on the given rendering
  * information.
@@ -232,8 +244,11 @@ export class Highlighter {
         this.steps_ += this.outsideCornerPaths_.bottomLeft();
       }
       
-      // Add highlights for multiple connections if needed
-      if (row.connections && row.connections.length > 1) {
+      // Check if this is a basic_switch_block
+      const isSwitchBlock = isBasicSwitchBlock(this.info_);
+      
+      // Add highlights for multiple connections if needed (only for basic_switch_block)
+      if (row.connections && row.connections.length > 1 && isSwitchBlock) {
         // We need to add multiple notch highlights
         const totalWidth = this.info_.width;
         const availableWidth = totalWidth - (2 * this.constants_.NOTCH_OFFSET_LEFT);
